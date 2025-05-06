@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import numpy as np
 import json
 import re
@@ -90,10 +89,11 @@ with st.sidebar:
         default=["Nike", "Apple", "Microsoft"]
     )
     
+    # Replace Industry filter with Date Updated filter
     st.subheader("Filters")
-    industry_filter = st.selectbox(
-        "Filter by Industry",
-        options=["All"] + sorted(df["Industry"].unique().tolist())
+    date_filter = st.selectbox(
+        "Filter by Date Updated",
+        options=["All"] + sorted(df["Date Updated"].unique().tolist())
     )
     
     st.subheader("Legend")
@@ -278,15 +278,29 @@ def create_category_chart(category_scores):
 def create_representation_chart(company_data):
     # Extract representation data
     categories = ["Board", "Executives", "Management", "Total Workforce"]
-    values = [
-        company_data.get("% Black on Board", 0),
-        company_data.get("% Black Executives", 0),
-        company_data.get("% Black in Management", 0),
-        company_data.get("% Black in Total Workforce", 0)
-    ]
     
-    # Convert to numeric values
-    values = [float(str(v).replace("%", "").strip()) if pd.notna(v) and v != "" else 0 for v in values]
+    # Convert string percentages to float values
+    try:
+        board = float(str(company_data.get("Black Board of Directors", "0")).split("/")[0]) / float(str(company_data.get("Black Board of Directors", "0")).split("/")[1]) * 100
+    except:
+        board = 0
+        
+    try:
+        executives = float(str(company_data.get("Black Executive/Senior Level Officials & Managers", "0%")).replace("%", ""))
+    except:
+        executives = 0
+        
+    try:
+        management = float(str(company_data.get("Black Mid-Level/First Managers", "0%")).replace("%", ""))
+    except:
+        management = 0
+        
+    try:
+        workforce = float(str(company_data.get("Total Black Employees", "0%")).replace("%", ""))
+    except:
+        workforce = 0
+    
+    values = [board, executives, management, workforce]
     
     # Create the comparison data
     us_population = [13.4, 13.4, 13.4, 13.4]  # US Black population percentage
@@ -299,7 +313,7 @@ def create_representation_chart(company_data):
         y=values,
         name=f"{company_data.get('Company Name', 'Company')}",
         marker_color='#3B82F6',
-        text=[f"{v}%" for v in values],
+        text=[f"{v:.1f}%" for v in values],
         textposition='auto',
     ))
     
@@ -387,7 +401,7 @@ def create_benchmark_chart(df, current_company, benchmark_companies):
                 
         # Add points for representation
         try:
-            board_rep = float(str(row.get("% Black on Board", "0")).replace("%", "").strip())
+            board_rep = float(str(row.get("Black Board of Directors", "0/1")).split("/")[0]) / float(str(row.get("Black Board of Directors", "0/1")).split("/")[1]) * 100
             if board_rep >= 13.4:  # US Black population
                 score += 10
             elif board_rep >= 8:
@@ -396,7 +410,7 @@ def create_benchmark_chart(df, current_company, benchmark_companies):
             pass
             
         try:
-            exec_rep = float(str(row.get("% Black Executives", "0")).replace("%", "").strip())
+            exec_rep = float(str(row.get("Black Executive/Senior Level Officials & Managers", "0%")).replace("%", "").strip())
             if exec_rep >= 13.4:  # US Black population
                 score += 10
             elif exec_rep >= 8:
@@ -437,7 +451,39 @@ def create_benchmark_chart(df, current_company, benchmark_companies):
     
     return fig
 
-# Function to create trend visualization
+# Function to create highlight visualization
+def create_highlight_visualization(company_data):
+    # Extract all highlights
+    highlights = []
+    for i in range(1, 6):
+        highlight = company_data.get(f"Highlight{i}", "")
+        if highlight and highlight.strip() != "":
+            highlights.append(highlight)
+    
+    # Create a simple visualization for highlights
+    if highlights:
+        # Create a dataframe
+        highlight_df = pd.DataFrame({"Highlight": highlights, "Importance": list(range(len(highlights), 0, -1))})
+        
+        # Create a horizontal bar chart
+        fig = px.bar(
+            highlight_df,
+            y="Highlight",
+            x="Importance", 
+            orientation='h',
+            title="Key Highlights",
+            labels={"Importance": "Priority", "Highlight": ""},
+            height=300 + (len(highlights) * 30),
+            color="Importance",
+            color_continuous_scale=px.colors.sequential.Blues
+        )
+        
+        fig.update_layout(showlegend=False, xaxis_visible=False)
+        return fig
+    else:
+        return None
+
+# Function to create trend visualization (simulated)
 def create_trend_visualization():
     # This would typically use historical data, but we'll simulate it
     years = [2020, 2021, 2022, 2023, 2024, 2025]
@@ -478,6 +524,84 @@ def create_trend_visualization():
     
     return fig
 
+# Function to create discrimination claims visualization
+def create_claims_visualization(company_data):
+    # Extract claims data
+    claims_text = company_data.get("2023-2025 Racial Discrimination Claims", "")
+    
+    if not claims_text or claims_text.strip() == "":
+        return None
+    
+    # Parse the claims data (simple approach)
+    claims_data = {"Year": [], "Count": []}
+    
+    if "2023" in claims_text:
+        claims_data["Year"].append("2023")
+        # Try to extract number - simple approach
+        match = re.search(r'(\d+)(?=\s*claims?|complaints?|allegations?)', claims_text)
+        if match:
+            claims_data["Count"].append(int(match.group(1)))
+        else:
+            claims_data["Count"].append(5)  # Default if can't parse
+    
+    if "2024" in claims_text:
+        claims_data["Year"].append("2024")
+        # Try to extract 2024 claims (this is oversimplified)
+        match = re.search(r'(?:2024[^0-9]*)(\d+)(?=\s*claims?|complaints?|allegations?)', claims_text)
+        if match:
+            claims_data["Count"].append(int(match.group(1)))
+        else:
+            claims_data["Count"].append(3)  # Default if can't parse
+    
+    if "2025" in claims_text:
+        claims_data["Year"].append("2025")
+        # Try to extract 2025 claims
+        match = re.search(r'(?:2025[^0-9]*)(\d+)(?=\s*claims?|complaints?|allegations?)', claims_text)
+        if match:
+            claims_data["Count"].append(int(match.group(1)))
+        else:
+            claims_data["Count"].append(1)  # Default if can't parse
+    
+    # If we have some parsed data, create visualization
+    if claims_data["Year"]:
+        claims_df = pd.DataFrame(claims_data)
+        
+        fig = px.bar(
+            claims_df, 
+            x="Year", 
+            y="Count",
+            title="Racial Discrimination Claims by Year",
+            labels={"Count": "Number of Claims", "Year": ""},
+            height=350,
+            color="Count",
+            color_continuous_scale=px.colors.sequential.Reds_r
+        )
+        
+        fig.update_layout(yaxis=dict(range=[0, max(claims_data["Count"]) * 1.2]))
+        
+        return fig
+    else:
+        # Create a simple text visualization
+        fig = go.Figure()
+        
+        fig.add_annotation(
+            x=0.5,
+            y=0.5,
+            text=claims_text,
+            showarrow=False,
+            font=dict(size=14)
+        )
+        
+        fig.update_layout(
+            title="Racial Discrimination Claims Information",
+            xaxis=dict(visible=False, showticklabels=False),
+            yaxis=dict(visible=False, showticklabels=False),
+            height=200,
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        
+        return fig
+
 # Main analysis section
 if company_name and analyze_button:
     matches = df[df["Company Name"].str.lower() == company_name.lower()]
@@ -493,13 +617,18 @@ if company_name and analyze_button:
             
             with col1:
                 st.markdown(f"<h2 class='sub-header'>{company_data['Company Name']}</h2>", unsafe_allow_html=True)
-                st.markdown(f"**Industry:** {company_data['Industry']}")
-                st.markdown(f"**Headquarters:** {company_data['Headquarters']}")
                 
-                # Add ticker symbol and market cap if available
-                ticker = company_data.get('Ticker Symbol', '')
-                if ticker and ticker != '':
-                    st.markdown(f"**Ticker:** {ticker}")
+                # Display sub-brands if available
+                sub_brands = company_data.get('Sub-Brands', "[]")
+                if sub_brands and sub_brands != "[]":
+                    try:
+                        brands_list = eval(sub_brands)
+                        if brands_list and len(brands_list) > 0:
+                            st.markdown("**Sub-Brands:** " + ", ".join(brands_list))
+                    except:
+                        pass
+                
+                st.markdown(f"**Last Updated:** {company_data['Date Updated']}")
             
             with col2:
                 with st.spinner("🤖 Analyzing with LLaMA..."):
@@ -550,7 +679,7 @@ if company_name and analyze_button:
         # Fourth row with detailed visualizations
         st.markdown("<h2 class='sub-header'>Detailed Analysis</h2>", unsafe_allow_html=True)
         
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 Representation", "🎯 Programs", "📈 Benchmarks", "🔮 Trends"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Representation", "🎯 Programs", "⚠️ Claims", "📈 Benchmarks", "🔮 Highlights"])
         
         with tab1:
             # Show representation data
@@ -559,28 +688,21 @@ if company_name and analyze_button:
             
             # Add data table for details
             st.markdown("### Detailed Representation Data")
+            
+            # Create a better formatted representation table
             representation_data = {
-                "Level": ["Board", "Executive", "Management", "Workforce"],
-                "Black Representation (%)": [
-                    company_data.get("% Black on Board", "N/A"),
-                    company_data.get("% Black Executives", "N/A"),
-                    company_data.get("% Black in Management", "N/A"),
-                    company_data.get("% Black in Total Workforce", "N/A")
-                ],
-                "US Black Population (%)": ["13.4%", "13.4%", "13.4%", "13.4%"],
-                "Gap": ["", "", "", ""]
+                "Level": ["Board of Directors", "Executive/Senior Officials", "Mid-Level/First Managers", "Total Workforce"],
+                "Black Representation": [
+                    company_data.get("Black Board of Directors", "N/A"),
+                    company_data.get("Black Executive/Senior Level Officials & Managers", "N/A"),
+                    company_data.get("Black Mid-Level/First Managers", "N/A"),
+                    company_data.get("Total Black Employees", "N/A")
+                ]
             }
             
-            # Calculate gaps
-            for i in range(len(representation_data["Level"])):
-                try:
-                    val = float(str(representation_data["Black Representation (%)"][i]).replace("%", "").strip())
-                    gap = val - 13.4
-                    representation_data["Gap"][i] = f"{gap:.1f}%"
-                except:
-                    representation_data["Gap"][i] = "N/A"
-            
-            st.dataframe(pd.DataFrame(representation_data), use_container_width=True)
+            # Convert to dataframe and display
+            rep_df = pd.DataFrame(representation_data)
+            st.dataframe(rep_df, use_container_width=True)
         
         with tab2:
             # Show DEI programs implementation
@@ -596,7 +718,9 @@ if company_name and analyze_button:
                 "Racial Pay Equity": company_data.get("Racial Pay Equity", "No"),
                 "Black Employee Resource Group": company_data.get("Black Employee Resource Group", "No"),
                 "Executive Compensation Tied to DEI Metrics": company_data.get("Executive Compensation Tied to DEI Metrics", "No"),
-                "Skills-First Hiring (OneTen Coalition)": company_data.get("Skills-First Hiring (OneTen Coalition)", "No")
+                "Skills-First Hiring (OneTen Coalition)": company_data.get("Skills-First Hiring (OneTen Coalition)", "No"),
+                "HBCU Pipeline Partnership": company_data.get("HBCU Pipeline Partnership", "No"),
+                "Supplier Development": company_data.get("Supplier Development", "No")
             }
             
             program_df = pd.DataFrame({
@@ -605,27 +729,71 @@ if company_name and analyze_button:
             })
             
             st.dataframe(program_df, use_container_width=True)
-        
+            
+            # Add financial metrics
+            st.markdown("### Financial DEI Metrics")
+            
+            financial_data = {
+                "Metric": [
+                    "Tier1 Supplier Diversity Spend",
+                    "Black Supplier Spend",
+                    "Minimum Estimated Black Community Investments"
+                ],
+                "Amount": [
+                    company_data.get("Tier1 Supplier Diversity Spend", "N/A"),
+                    company_data.get("Black Supplier Spend", "N/A"),
+                    company_data.get("Minimum Estimated Black Community Investments", "N/A")
+                ]
+            }
+            
+            financial_df = pd.DataFrame(financial_data)
+            st.dataframe(financial_df, use_container_width=True)
+            
         with tab3:
+            # Display discrimination claims data
+            claims_viz = create_claims_visualization(company_data)
+            if claims_viz:
+                st.plotly_chart(claims_viz, use_container_width=True)
+                
+                # Show the raw claims text
+                st.markdown("### Claims Details")
+                st.info(company_data.get("2023-2025 Racial Discrimination Claims", "No claims information available"))
+            else:
+                st.info("No discrimination claims data available for this company.")
+        
+        with tab4:
             # Show benchmark comparison
             if benchmark_companies:
                 benchmark_chart = create_benchmark_chart(df, company_data["Company Name"], benchmark_companies)
                 st.plotly_chart(benchmark_chart, use_container_width=True)
-                
-                # Add industry average comparison if industry filter is applied
-                if industry_filter != "All":
-                    st.markdown(f"### {industry_filter} Industry Comparison")
-                    # This would typically calculate industry averages
             else:
                 st.info("Select benchmark companies in the sidebar to see comparison.")
-        
-        with tab4:
+                
             # Show industry trends
             trend_chart = create_trend_visualization()
             st.plotly_chart(trend_chart, use_container_width=True)
             
             st.info("Note: This trend data represents industry-wide patterns and not specific company performance.")
         
+        with tab5:
+            # Display company highlights
+            highlights_viz = create_highlight_visualization(company_data)
+            if highlights_viz:
+                st.plotly_chart(highlights_viz, use_container_width=True)
+            else:
+                st.info("No highlight information available for this company.")
+            
+            # List all highlights
+            highlight_text = ""
+            for i in range(1, 6):
+                highlight = company_data.get(f"Highlight{i}", "")
+                if highlight and highlight.strip() != "":
+                    highlight_text += f"{i}. {highlight}\n\n"
+            
+            if highlight_text:
+                st.markdown("### Company Highlights")
+                st.markdown(highlight_text)
+            
         # Fifth row with recommendations
         st.markdown("<h2 class='sub-header'>🛠️ Recommendations</h2>", unsafe_allow_html=True)
         
@@ -664,7 +832,7 @@ else:
     
     # Show some sample companies
     st.markdown("### Sample Companies")
-    sample_companies = ["Nike", "Apple", "Microsoft", "Coca-Cola", "Johnson & Johnson"]
+    sample_companies = ["Nike", "Apple", "Microsoft", "Coca-Cola", "Tesla"]
     
     sample_cols = st.columns(len(sample_companies))
     for i, col in enumerate(sample_cols):
@@ -676,16 +844,16 @@ else:
     # Show dataset overview
     st.markdown("### Dataset Overview")
     
-    # Count companies by industry
-    industry_counts = df["Industry"].value_counts().reset_index()
-    industry_counts.columns = ["Industry", "Count"]
+    # Count companies by date updated
+    date_counts = df["Date Updated"].value_counts().reset_index()
+    date_counts.columns = ["Date Updated", "Count"]
     
     # Create pie chart
     fig = px.pie(
-        industry_counts, 
+        date_counts, 
         values="Count", 
-        names="Industry",
-        title="Companies by Industry"
+        names="Date Updated",
+        title="Companies by Last Update Date"
     )
     st.plotly_chart(fig, use_container_width=True)
     
