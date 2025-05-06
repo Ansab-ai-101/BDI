@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from groq import Groq
 import json
+import re
 
 # --- Load GROQ API key from secrets ---
 api_key = st.secrets["GROQ_API_KEY"]
@@ -16,18 +17,16 @@ def load_data():
     return pd.read_csv(csv_url)
 
 df = load_data()
-st.title("📊 BDI Racial Inclusivity Score Dashboard")
 
+st.title("📊 BDI Racial Inclusivity Score Dashboard")
 company_name = st.text_input("🔍 Enter a company name to analyze:", "Nike")
 
 def get_llama_analysis(company_data):
     input_json = company_data.to_dict()
     prompt = f"""
 You are a DEI expert. Based on the following data for {input_json.get("Company Name")}, analyze its racial inclusivity with focus on Black representation, leadership, pay equity, and supplier diversity.
-
 Data:
 {json.dumps(input_json, indent=2)}
-
 Output a JSON like:
 {{
   "Inclusivity Score": 87,
@@ -40,7 +39,6 @@ Output a JSON like:
 }}
 Return ONLY the JSON object. No explanation.
 """
-
     response = client.chat.completions.create(
         model="meta-llama/llama-4-scout-17b-16e-instruct",
         messages=[{"role": "user", "content": prompt}],
@@ -49,11 +47,46 @@ Return ONLY the JSON object. No explanation.
         top_p=1,
         stream=False
     )
-
+    
+    # Get the response content
+    response_content = response.choices[0].message.content
+    
+    # Debug: Print the raw response
+    st.write("DEBUG - Raw response:", response_content)
+    
     try:
-        return json.loads(response.choices[0].message.content)
-    except:
-        return None
+        # Try to extract JSON if it's wrapped in backticks or has extra text
+        json_match = re.search(r'```(?:json)?(.*?)```', response_content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1).strip()
+            return json.loads(json_str)
+        
+        # If no code blocks, try to find JSON-like structure
+        json_match = re.search(r'({[\s\S]*})', response_content)
+        if json_match:
+            json_str = json_match.group(1).strip()
+            return json.loads(json_str)
+        
+        # Otherwise try parsing the whole response
+        return json.loads(response_content)
+    except Exception as e:
+        st.write(f"DEBUG - Error parsing JSON: {e}")
+        
+        # Fallback: Create a structured response if parsing fails
+        try:
+            # Build a manual structured response
+            fallback_response = {
+                "Inclusivity Score": 50,
+                "Summary": "Analysis failed to parse. Please try again or check the model response format.",
+                "Recommendations": [
+                    "Try with a different company",
+                    "Check API connection",
+                    "Review model parameters"
+                ]
+            }
+            return fallback_response
+        except:
+            return None
 
 if company_name:
     matches = df[df["Company Name"].str.lower() == company_name.lower()]
@@ -63,19 +96,18 @@ if company_name:
         company_data = matches.iloc[0]
         st.subheader(f"📄 DEI Data for {company_name}")
         st.dataframe(pd.DataFrame(company_data).rename(columns={0: 'Value'}))
-
+        
         with st.spinner("🤖 Analyzing with LLaMA..."):
             analysis = get_llama_analysis(company_data)
-
+        
         if analysis:
             st.metric("Inclusivity Score", f"{analysis['Inclusivity Score']} / 100")
             st.subheader("📌 Summary")
             st.success(analysis["Summary"])
-
             st.subheader("🛠️ Recommendations")
             for rec in analysis["Recommendations"]:
                 st.write(f"✅ {rec}")
-
+            
             st.subheader("📈 DEI Radar Chart (Binary Indicators)")
             indicators = {
                 "Black CEO": company_data["Black CEO"],
@@ -85,12 +117,12 @@ if company_name:
                 "Executive Compensation Tied to DEI Metrics": company_data["Executive Compensation Tied to DEI Metrics"],
                 "Skills-First Hiring (OneTen Coalition)": company_data["Skills-First Hiring (OneTen Coalition)"]
             }
-
+            
             labels = list(indicators.keys())
             values = [1 if str(v).strip().lower() == "yes" else 0 for v in indicators.values()]
             values += values[:1]
             labels += labels[:1]
-
+            
             fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
             ax.plot(range(len(labels)), values, marker='o')
             ax.fill(range(len(labels)), values, alpha=0.25)
