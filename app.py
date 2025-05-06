@@ -11,7 +11,7 @@ client = Groq(api_key=api_key)
 # --- Load CSV from GitHub (use your raw URL) ---
 @st.cache_data
 def load_data():
-    csv_url = "https://raw.githubusercontent.com/your-username/your-repo-name/main/DEI_dataset_llama_clean.csv"
+    csv_url = "https://raw.githubusercontent.com/Ansab-ai-101/BDI/main/DEI_dataset_llama_clean.csv"
     return pd.read_csv(csv_url)
 
 df = load_data()
