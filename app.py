@@ -1,4 +1,5 @@
 import streamlit as st
+st.set_page_config(page_title="BDI Racial Inclusivity Dashboard", layout="wide")
 import pandas as pd
 import matplotlib.pyplot as plt
 from groq import Groq
@@ -15,8 +16,6 @@ def load_data():
     return pd.read_csv(csv_url)
 
 df = load_data()
-
-st.set_page_config(page_title="BDI Racial Inclusivity Dashboard", layout="wide")
 st.title("📊 BDI Racial Inclusivity Score Dashboard")
 
 company_name = st.text_input("🔍 Enter a company name to analyze:", "Nike")
