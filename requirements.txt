@@ -1,4 +1,8 @@
 streamlit
 pandas
 matplotlib
+numpy
+plotly
 groq
+altair
+streamlit-echarts
